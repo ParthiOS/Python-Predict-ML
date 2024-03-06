@@ -1,189 +1,205 @@
-# make working directory relative to where program is located
-import os
-import pickle
-import pandas as pd 
-from sklearn import  metrics
-from apply_stats import *
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-from possible_stats import possibleStats
+
+
+from apply_stats import bas_adv_mean, bas_adv_zscore, bas_adv_sd
 from matchups import past_matchups
+from get_team_stats import get_team_stats
+from all_stats import all_stats
+
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn import metrics
+import pandas as pd
+import pickle
+import os
 from datetime import timedelta, date
+
 
 def set_work_dir(directoryName):
 
-    program_dir = os.path.dirname(os.path.abspath(__file__))
-
-    new_work_dir = os.path.join(program_dir, directoryName)
-
-    os.chdir(new_work_dir)
-
-def z_difference(stat_home, stat_away, mean, standard_dev):
+    programDirectory = os.path.dirname(os.path.abspath(__file__))
+    newCurrentWorkingDirectory = os.path.join(programDirectory, directoryName)
+    os.chdir(newCurrentWorkingDirectory)
 
 
-    # find the difference in z scores between the home and away teams
-    home_z = bas_adv_z(stat_home, mean, standard_dev)
-    away_z = bas_adv_z(stat_away, mean, standard_dev)
 
-    diff_z = home_z - away_z
-    return diff_z
+def z_differential(observedStatHome, observedStatAway, mean, standardDeviation):
 
-def put_into_df_list(daily_games, mean_dict, stand_dev_dict, start, end, season):
-    
-    df = []
-    results = daily_games[1]
-    game_num = 0
+    homeTeamZScore = bas_adv_zscore(observedStatHome, mean, standardDeviation)
+    awayTeamZScore = bas_adv_zscore(observedStatAway, mean, standardDeviation)
 
-    for home, away in daily_games[0].items():
-        home_stats = get_team_stats(home, start, end, season)
-        away_stats = get_team_stats(away, start, end, season)   
-        curr_game = [home, away]
-        for stat, type in possibleStats.items():
-            z_diff = z_difference(home_stats[stat], away_stats[stat], mean_dict[stat], stand_dev_dict[stat])
-            curr_game.append(z_diff)
-        
+    differenceInZScore = homeTeamZScore - awayTeamZScore
+    return differenceInZScore
 
 
-        if results[game_num] == 'W':
+
+def info_to_df(dailyGames, meanDict, standardDeviationDict, startDate, endDate, season):
+
+    fullDataFrame = []
+    gameNumber = 0  
+    dailyResults = dailyGames[1]  
+
+    for homeTeam,awayTeam in dailyGames[0].items():
+
+        homeTeamStats = get_team_stats(homeTeam, startDate, endDate, season)
+        awayTeamStats = get_team_stats(awayTeam, startDate, endDate, season)
+
+        currentGame = [homeTeam,awayTeam]
+
+        for stat,statType in all_stats.items():  
+            zScoreDif = z_differential(homeTeamStats[stat], awayTeamStats[stat], meanDict[stat], standardDeviationDict[stat])
+            currentGame.append(zScoreDif)
+
+        if dailyResults[gameNumber] == 'W':  # Sets result to 1 if a win
             result = 1
-        else:
+        else:  # Sets result to 0 if loss
             result = 0
 
-        
-        curr_game.append(result)
+        currentGame.append(result)
+        gameNumber += 1
 
-        game_num += 1
+        print(currentGame)
+        fullDataFrame.append(currentGame)  
 
-        print(curr_game)
-        df.append(curr_game)
-
-    return df
+    return(fullDataFrame)
 
 
+def date_range(startDate, endDate):
+
+    for n in range(int ((endDate - startDate).days)):
+        yield startDate + timedelta(n)
 
 
-def create_mean_sd_dict(start, end, season):
 
-    mean_dict = {}
-    sd_dict = {}
+def create_mean_sd_dicts(startDate, endDate, season):
 
-    for stat, stype in possibleStats.items():
+    meanDict = {}
+    standardDeviationDict = {}
 
-        # gather the stats and put into dictionary
-        
-        
-        stat_mean = bas_adv_mean(start, end, stat, stype, season)
-        mean_dict.update({stat: stat_mean})
-        stat_sd = bas_adv_stand_dev(start, end, stat, stype, season)
-        sd_dict.update({stat: stat_sd})
-    # put mean and sd into this big dict
-    big_dict = []
-    big_dict.append(mean_dict)
-    big_dict.append(sd_dict)
+    for stat, statType in all_stats.items():
+        statMean = bas_adv_mean(startDate, endDate, stat, statType, season)
+        meanDict.update({stat: statMean})
 
-    return big_dict
+        statStandardDeviation = bas_adv_sd(startDate, endDate, stat, statType, season)
+        standardDeviationDict.update({stat: statStandardDeviation})
 
-def get_range(start, end):
+    bothDicts = []
+    bothDicts.append(meanDict)
+    bothDicts.append(standardDeviationDict)
 
-    for d in range(int((end - start).days)):
-        yield start + timedelta(d)
+    return bothDicts
 
-def create_training_set(s_year, s_month, s_day, e_year, e_month, e_day, season, s_season):
 
-    matches = []
-    start = date(s_year,s_month, s_day) # rearrange to be in the proper format if needed check later if causing an error with parameters
-    end = date(e_year, e_month, e_day)
 
-    
-    
-    for d in get_range(start, end):
-        curr_date = d.strftime("%m/%d/%Y")
-        print(curr_date)
-        prev_day = d - timedelta(days = 1)
-        prev_day_form = prev_day.strftime("%m/%d/%Y")
 
-        mean_sd_dict = create_mean_sd_dict(s_season, prev_day_form, season)
-        mean_dict = mean_sd_dict[0]
-        sd_dict = mean_sd_dict[1]
+def get_train_set(startYear, startMonth, startDay, endYear, endMonth, endDay, season, startOfSeason):
 
-        todays_games = past_matchups(curr_date, season)
-        todays_games_stat_list = put_into_df_list(todays_games, mean_dict, sd_dict, s_season, prev_day_form, season)
-        
-        for game in todays_games_stat_list:
-            game.append(curr_date)
-            matches.append(game)
+    startDate = date(startYear, startMonth, startDay)
+    endDate = date(endYear, endMonth, endDay)
 
-        print(matches)
-        return matches
+    startDateFormatted = startDate.strftime("%m/%d/%Y")  
+    allGames = []
 
-    
+    for singleDate in date_range(startDate, endDate):
+        currentDate = singleDate.strftime("%m/%d/%Y") 
+        print(currentDate)
 
-def create_df(games_list):
+        previousDay = singleDate - timedelta(days=1)
+        previousDayFormatted = previousDay.strftime("%m/%d/%Y")
+
+        meanAndStandardDeviationDicts = create_mean_sd_dicts(startOfSeason, previousDayFormatted, season)
+        meanDict = meanAndStandardDeviationDicts[0]  
+        standardDeviationDict = meanAndStandardDeviationDicts[1]  
+
+        currentDayGames = past_matchups(currentDate, season)  
+        currentDayGamesAndStatsList = info_to_df(currentDayGames, meanDict, standardDeviationDict, startOfSeason, previousDayFormatted, season)  
+
+        for game in currentDayGamesAndStatsList: 
+            game.append(currentDate)
+            allGames.append(game)
+
+    print(allGames)
+    return(allGames)
+
+
+
+def create_df(listOfGames):
 
     games = pd.DataFrame(
-        games_list, columns = ['Home', 'Away', 'W_PCT', 'REB', 'TOV', 'PLUS_MINUS',
-                                'OFF_RATING', 'DEF_RATING', 'TS_PCT', 'Result', 'Date']
+        listOfGames,
+        columns=['Home', 'Away', 'W_PCT', 'REB', 'TOV', 'PLUS_MINUS', 'OFF_RATING', 'DEF_RATING', 'TS_PCT', 'Result', 'Date']
     )
 
-    print(games) 
-    return games
-
-
-def perform_regression(df):
-    cols = ['W_PCT', 'REB', 'TOV', 'PLUS_MINUS', 'OFF_RATING', 'DEF_RATING', 'TS_PCT']
-
-    X = df[cols]
-    y = df.Result 
+    print(games)
+    return(games)
 
 
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.25, shuffle = True)
+def performLogReg(dataframe):
 
-    model = LogisticRegression()
+    
+    featureColumns = ['W_PCT', 'REB', 'TOV', 'PLUS_MINUS', 'OFF_RATING', 'DEF_RATING', 'TS_PCT']
 
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    c_matrix = metrics.confusion_matrix(y_test, y_pred)
+    X = dataframe[featureColumns] 
+    Y = dataframe.Result  
 
-    print('Info:')
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.25, shuffle=True)
+    logreg = LogisticRegression()
 
-    for i in range(len(cols)):
-        coeff = model.coef_
-        curr_col = cols[i]
-        curr_coeff = coeff[0][i]
+    logreg.fit(X_train, Y_train)  
 
-        print(curr_col + ':' + str(curr_coeff))
+    Y_pred = logreg.predict(X_test)
 
-    print("Accuracy:", metrics.accuracy_score(y_test, y_pred))
-    print("Precision:", metrics.precision_score(y_test, y_pred))
-    print("Recall:", metrics.recall_score(y_test, y_pred))
+    confusionMatrix = metrics.confusion_matrix(Y_test, Y_pred)  
+
+    
+    print('Coefficient Information:')
+
+    for i in range(len(featureColumns)):  
+
+        logregCoefficients = logreg.coef_
+
+        currentFeature = featureColumns[i]
+        currentCoefficient = logregCoefficients[0][i]
+
+        print(currentFeature + ': ' + str(currentCoefficient))
+
+    print('----------------------------------')
+
+    print("Accuracy:", metrics.accuracy_score(Y_test, Y_pred))
+    print("Precision:", metrics.precision_score(Y_test, Y_pred))
+    print("Recall:", metrics.recall_score(Y_test, Y_pred))
 
     print('----------------------------------')
 
     print('Confusion Matrix:')
-    print(c_matrix)
+    print(confusionMatrix)
+
+    return logreg
 
 
-def saveModel(model, filename):
 
-    # Change to where you want to save the model
-    set_work_dir('Models')
+def save_model(model, filename):
+
+    
+    set_work_dir('SavedModels')
 
     with open(filename, 'wb') as file:
         pickle.dump(model, file)
 
+
+
 def createModel(startYear=None, startMonth=None, startDay=None, endYear=None, endMonth=None, endDay=None, season='2018-19', startOfSeason = '10/16/2018', filename='model.pkl'):
 
-    allGames = create_training_set(startYear, startMonth, startDay, endYear, endMonth, endDay, season, startOfSeason)  # Unnecessary if using data from CSV file
+    allGames = get_train_set(startYear, startMonth, startDay, endYear, endMonth, endDay, season, startOfSeason)  # Unnecessary if CSV file
 
-    allGamesDataframe = create_df(allGames)  # Unnecessary if using data from CSV file
+    allGamesDataframe = create_df(allGames)  # Unnecessary if CSV file
 
     #set_work_dir('Data')
-    #allGamesDataframe = pd.read_csv('COMBINEDgamesWithInfo2016-19.csv')  # Should be commented out if needing to obtain data on different range of games
-    #filename = 'model1.pkl'
-    logRegModel = perform_regression(allGamesDataframe)
+    #allGamesDataframe = pd.read_csv('COMBINEDgamesWithInfo2016-19.csv')  # Should be commented out if new range
 
-    saveModel(logRegModel, filename)
+    logRegModel = (allGamesDataframe)
+    
+    save_model(logRegModel, filename)
 
-
-createModel(startYear=2023, startMonth=10, startDay=24, endYear=2024, endMonth=2, endDay=1, season='2023-24', startOfSeason = '10/24/2023', filename='model.pkl')
+#createModel(2023, 10, 28, 2024, 2, 14,'2023-24', '10/24/2023')
