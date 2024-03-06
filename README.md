@@ -5,4 +5,4 @@ In this project I will be creating a machine learning algorithm to predict the o
 Next Steps:
 1. The NBA has an upset rate of ~32% this means that if my model accuracy is below 68% (preferrably higher that 75%) it will not be accounting for the upsets that happen, try to find a way to figure out if an upset will happen.
 
-2. Transform the entire project into an object oriented program right now this is very bad code design.
+2. Transform the entire project into an object oriented program .
