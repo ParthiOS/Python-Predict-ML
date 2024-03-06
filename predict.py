@@ -76,7 +76,7 @@ def interpret_pred(gamesWithPredictions):
         homeTeam = list(dailyGames.keys())[gameNum]
         awayTeam = list(dailyGames.values())[gameNum]
 
-        print('There is a ' + winProbPercent + ' chance that the ' + homeTeam + ' will defeat the ' + awayTeam + '.')
+        print('The ' + homeTeam   + ' winning against ' + awayTeam + ' prob is -> ' +  winProbPercent + '.')
 
 
 # Fetches games on set date and returns predictions for each game
